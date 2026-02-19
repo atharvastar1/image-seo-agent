@@ -152,6 +152,10 @@ def search():
         "csv": csv_filename
     })
 
+@app.route('/logo.png')
+def logo():
+    return send_from_directory('.', 'logo.png')
+
 @app.route('/download/<filename>')
 def download_file(filename):
     return send_from_directory('.', filename, as_attachment=True)
