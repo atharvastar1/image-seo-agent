@@ -5,11 +5,14 @@ import csv
 import re
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
 # --- REUSE EXISTING LOGIC ---
-SERP_API_KEY = "b9b6c464b5a0e6068004e475b8b1e838c5d14d2141b0e14cc0e17cc23f089348"
+SERP_API_KEY = os.getenv("SERP_API_KEY")
 
 class DeepLLMAnalyzer:
     def __init__(self, keyword, google_results, bing_results):
