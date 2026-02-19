@@ -455,43 +455,63 @@
 
         <div id="dashboardSection" class="dashboard-grid">
             <div class="strategy-card">
-                <span class="label">Primary SEO Blueprint</span>
-                <div id="mainWinner" class="winner-title">Expert-grade title content goes here...</div>
-                <div class="data-stats">
+                <span class="label">SEO Winner Title Construction</span>
+                <div id="mainWinner" class="winner-title" style="color: #fff;">Constructing perfect title...</div>
+                <div class="data-stats" style="grid-template-columns: repeat(2, 1fr);">
                     <div class="stat-box">
-                        <span class="stat-label">User Intent</span>
+                        <span class="stat-label">Market Intent</span>
                         <span id="statIntent" class="stat-val">—</span>
                     </div>
                     <div class="stat-box">
-                        <span class="stat-label">Semantic Depth</span>
-                        <span id="statHubs" class="stat-val">—</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="stat-label">Psychological Load</span>
-                        <span id="statPsych" class="stat-val">—</span>
+                        <span class="stat-label">Ranking Difficulty</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span id="statDiff" class="stat-val">—</span>
+                            <div
+                                style="flex: 1; height: 6px; background: #222; border-radius: 3px; position: relative;">
+                                <div id="diffBar"
+                                    style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: var(--primary); border-radius: 3px; transition: width 1s ease;">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="strategy-card"
                 style="padding: 40px; background: rgba(16, 185, 129, 0.02); border-color: rgba(16, 185, 129, 0.2);">
-                <span class="label" style="color: var(--accent);">Top-Rank Logic</span>
-                <p id="topReasoning" style="font-size: 1.1rem; color: #fff; line-height: 1.6; margin-bottom: 24px;">AI
-                    is evaluating the #1 results...</p>
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                    <button class="action-btn" style="margin-top: 0;" onclick="copyOptimizedSchema()">COPY SCHEMA
-                        CODE</button>
-                    <button class="action-btn"
-                        style="margin-top: 0; border-color: var(--border); color: var(--text-muted)"
-                        onclick="downloadCSVEscape()">DOWNLOAD CSV REPORT</button>
+                <span class="label" style="color: var(--accent);">Semantic Gap Analysis</span>
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <div>
+                        <span class="stat-label">High-Value Missing Keywords</span>
+                        <span id="gapKeywords" class="stat-val" style="color: #fff; font-size: 1.2rem;">Evaluating
+                            gaps...</span>
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-top: 10px;">
+                        <button class="action-btn" style="margin-top: 0; flex: 1;" onclick="copyOptimizedSchema()">COPY
+                            SCHEMA</button>
+                        <button class="action-btn"
+                            style="margin-top: 0; flex: 1; border-color: var(--border); color: var(--text-muted)"
+                            onclick="downloadCSVEscape()">EXPORT CSV</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div id="summarySection" class="strategy-card" style="margin-bottom: 80px; display: none;">
-            <span class="label">Executive SEO Strategy Summary</span>
-            <p id="globalSummary"
-                style="font-size: 1.3rem; font-weight: 500; color: var(--primary-light); line-height: 1.7;"></p>
+        <div class="dashboard-grid" id="professionalExtra" style="margin-bottom: 80px; display: none;">
+            <div class="strategy-card">
+                <span class="label">Master Strategy Summary</span>
+                <p id="globalSummary" style="font-size: 1.1rem; color: #fff; line-height: 1.7; margin-bottom: 24px;">
+                </p>
+                <button class="action-btn" style="width: auto; padding: 12px 30px;"
+                    onclick="copyText('globalSummary', 'SEO Summary Copied!')">COPY STRATEGY</button>
+            </div>
+            <div class="strategy-card" style="border-color: var(--primary-light);">
+                <span class="label" style="color: var(--primary-light);">Alt-Text Optimization Blueprint</span>
+                <p id="altOptimization"
+                    style="font-size: 1rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 24px;"></p>
+                <button class="action-btn" style="width: auto; padding: 12px 30px; border-color: var(--primary-light);"
+                    onclick="copyText('altOptimization', 'Alt-Text Strategy Copied!')">COPY ALT STRATEGY</button>
+            </div>
         </div>
 
         <div id="rankingsSection" class="rankings-section">
@@ -519,6 +539,14 @@
     <script>
         let currentCsv = '';
 
+        // Added Enter-key listener for professional UX
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('keywordField');
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') runAdvancedAudit();
+            });
+        });
+
         async function runAdvancedAudit() {
             const kw = document.getElementById('keywordField').value;
             if (!kw) return;
@@ -536,16 +564,18 @@
                     body: JSON.stringify({ keyword: kw })
                 });
 
-                status.innerText = 'LLAMA 3.2: EVALUATING 40+ COMPETITIVE TITLES...';
+                status.innerText = 'LLAMA 3.2: CONSTRUCTING WINNER SEO STRATEGY...';
                 const data = await res.json();
                 currentCsv = data.csv;
 
                 // Populate AI Data
                 document.getElementById('mainWinner').innerText = data.analysis.winner;
                 document.getElementById('statIntent').innerText = data.analysis.intent;
-                document.getElementById('statHubs').innerText = data.analysis.hubs;
-                document.getElementById('statPsych').innerText = data.analysis.psychology;
-                document.getElementById('topReasoning').innerText = data.analysis.reasoning;
+                document.getElementById('statDiff').innerText = data.analysis.difficulty + '%';
+                document.getElementById('diffBar').style.width = data.analysis.difficulty + '%';
+
+                document.getElementById('gapKeywords').innerText = data.analysis.gap;
+                document.getElementById('altOptimization').innerText = data.analysis.alt;
                 document.getElementById('globalSummary').innerText = data.analysis.summary;
 
                 // Populate Rankings
@@ -555,13 +585,19 @@
                 // Animate Reveal
                 overlay.style.display = 'none';
                 document.getElementById('dashboardSection').style.display = 'grid';
-                document.getElementById('summarySection').style.display = 'block';
+                document.getElementById('professionalExtra').style.display = 'grid';
                 document.getElementById('rankingsSection').style.display = 'grid';
 
             } catch (err) {
                 overlay.style.display = 'none';
                 alert('Core system offline. Please verify backend state.');
             }
+        }
+
+        function copyText(id, msg) {
+            const text = document.getElementById(id).innerText;
+            navigator.clipboard.writeText(text);
+            alert(msg);
         }
 
         function renderColumn(id, results) {

@@ -17,21 +17,21 @@ class DeepLLMAnalyzer:
         self.titles = [r['title'] for r in google_results] + [r['title'] for r in bing_results]
 
     def analyze(self):
-        print(f"🤖 Forensic SEO Audit starting for '{self.keyword}'...")
+        print(f"🤖 SEO-Centric Audit starting for '{self.keyword}'...")
         prompt = f"""
-        Role: Senior SEO Strategist
-        Task: Analyze 40 ranked titles for '{self.keyword}'.
+        Role: Master SEO Architect
+        Task: Analyze 40 image titles for '{self.keyword}' and construct a title that will CRUSH the competition.
         
-        Titles:
+        Titles to Audit:
         {chr(10).join(self.titles)}
         
         Provide:
-        1. Intent: [One Word]
-        2. Hubs: [3 Keywords]
-        3. Winner: [The Optimized Title for 2024]
-        4. Psychology: [Hook Category]
-        5. Reasoning: [Explain why the #1 results are currently winning in 2-3 sentences]
-        6. Summary: [A high-level 4-sentence SEO strategy summary to dominate this niche]
+        1. Intent: [User search intent: e.g., Informational, Transactional]
+        2. Winner: [The superior, click-magnetic title for 2024. Must be better than the top 10.]
+        3. Gap_Keywords: [3-4 high-value keywords missing from current titles]
+        4. Difficulty: [Score 1-100 based on keyword saturation]
+        5. Alt_Optimization: [Recommended Alt Text strategy]
+        6. Summary: [3-sentence strategy summary]
         7. Drivers: [Driver1|Driver2|...|Driver40]
         """
         try:
@@ -40,48 +40,37 @@ class DeepLLMAnalyzer:
             text = r.json().get("response", "")
             
             data = {
-                "intent": "Unknown", 
-                "hubs": "Unknown", 
-                "winner": "Unknown", 
-                "psychology": "Unknown", 
-                "reasoning": "Determining ranking factors...",
-                "summary": "Building strategy...",
-                "drivers": []
+                "intent": "Checking...", "winner": "Constructing Title...", 
+                "gap": "Evaluating...", "difficulty": "50", 
+                "alt": "Optimizing...", "summary": "N/A", "drivers": []
             }
             
-            # Robust parsing using keywords anywhere in the line or handling bolding
+            def clean_val(val):
+                # Aggressively strip markdown bolding, italics, and leading numbering
+                v = re.sub(r'^\d+\.\s*', '', val) # Remove leading "1. "
+                v = v.replace('**', '').replace('*', '').strip()
+                return v
+
             lines = text.split('\n')
             for line in lines:
                 l_strip = line.strip().lower()
-                # Remove common markdown bolding or numbering like "1. Intent:" or "**Intent:**"
-                clean_content = re.sub(r'^[\d\s\.\*#-]+', '', line).strip()
-                
-                if re.search(r'^intent:', l_strip) or re.search(r'^\*\*intent\*\*:', l_strip) or re.search(r'intent:', l_strip):
-                    data["intent"] = clean_content.split(':', 1)[-1].strip()
-                elif re.search(r'^hubs:', l_strip) or re.search(r'^\*\*hubs\*\*:', l_strip) or re.search(r'hubs:', l_strip):
-                    data["hubs"] = clean_content.split(':', 1)[-1].strip()
-                elif re.search(r'^winner:', l_strip) or re.search(r'^\*\*winner\*\*:', l_strip) or re.search(r'winner:', l_strip):
-                    data["winner"] = clean_content.split(':', 1)[-1].strip()
-                elif re.search(r'^psychology:', l_strip) or re.search(r'^\*\*psychology\*\*:', l_strip) or re.search(r'psychology:', l_strip):
-                    data["psychology"] = clean_content.split(':', 1)[-1].strip()
-                elif re.search(r'^reasoning:', l_strip) or re.search(r'^\*\*reasoning\*\*:', l_strip) or re.search(r'reasoning:', l_strip):
-                    data["reasoning"] = clean_content.split(':', 1)[-1].strip()
-                elif re.search(r'^summary:', l_strip) or re.search(r'^\*\*summary\*\*:', l_strip) or re.search(r'summary:', l_strip):
-                    data["summary"] = clean_content.split(':', 1)[-1].strip()
-                elif re.search(r'^drivers:', l_strip) or re.search(r'^\*\*drivers\*\*:', l_strip) or re.search(r'drivers:', l_strip):
-                    drivers_raw = clean_content.split(':', 1)[-1].strip()
+                if "intent:" in l_strip: data["intent"] = clean_val(line.split(':', 1)[-1])
+                elif "winner:" in l_strip: data["winner"] = clean_val(line.split(':', 1)[-1])
+                elif "gap_keywords:" in l_strip: data["gap"] = clean_val(line.split(':', 1)[-1])
+                elif "difficulty:" in l_strip: data["difficulty"] = clean_val(line.split(':', 1)[-1]).replace('%', '')
+                elif "alt_optimization:" in l_strip: data["alt"] = clean_val(line.split(':', 1)[-1])
+                elif "summary:" in l_strip: data["summary"] = clean_val(line.split(':', 1)[-1])
+                elif "drivers:" in l_strip:
+                    drivers_raw = clean_val(line.split(':', 1)[-1])
                     data["drivers"] = [d.strip() for d in drivers_raw.split('|')]
             
             return data
         except Exception as e:
             print(f"Llama Error: {e}")
             return {
-                "intent": "Educational", 
-                "hubs": "SEO", 
-                "winner": "Fallback Strategy", 
-                "psychology": "None", 
-                "reasoning": "Ranking based on direct keyword relevance.",
-                "summary": "Focus on high-quality thumbnails and exact keyword matching in Alt text.",
+                "intent": "SEO", "winner": f"Optimized {self.keyword} 2024",
+                "gap": "Missing Context", "difficulty": "40",
+                "alt": "Focus Keywords", "summary": "N/A", 
                 "drivers": ["Direct Match"] * 40
             }
 
@@ -128,12 +117,14 @@ def search():
     csv_filename = f"results_{clean_kw}.csv"
     with open(csv_filename, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
-        writer.writerow(["AI STRATEGY REPORT"])
+        writer.writerow(["MASTER SEO AUDIT: " + keyword])
         writer.writerow(["Recommended Title", analysis['winner']])
-        writer.writerow(["Primary Intent", analysis['intent']])
+        writer.writerow(["Difficulty Score", analysis.get('difficulty')])
+        writer.writerow(["Visual Style", analysis.get('visual_theme')])
+        writer.writerow(["Color Palette", analysis.get('palette')])
         writer.writerow([])
         writer.writerow(["RANKINGS DATA"])
-        writer.writerow(["Rank", "Engine", "Title", "Ranking Driver Keyword", "Source", "Link"])
+        writer.writerow(["Rank", "Engine", "Title", "Ranking Driver", "Source", "Link"])
         for i, res in enumerate(results["Google"]):
             writer.writerow([i+1, "Google", res['title'], res['driver'], res['source'], res['link']])
         for i, res in enumerate(results["Bing"]):
