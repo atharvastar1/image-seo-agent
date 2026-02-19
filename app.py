@@ -20,22 +20,23 @@ class DeepLLMAnalyzer:
         self.titles = [r['title'] for r in google_results] + [r['title'] for r in bing_results]
 
     def analyze(self):
-        print(f"🤖 SEO-Centric Audit starting for '{self.keyword}'...")
+        print(f"🤖 Elite Professional Audit starting for '{self.keyword}'...")
         prompt = f"""
-        Role: Master SEO Architect
-        Task: Analyze 40 image titles for '{self.keyword}' and construct a title that will CRUSH the competition.
+        Role: Senior SEO & Semantic Data Scientist
+        Task: Perform an ELITE competitive audit for '{self.keyword}'.
         
-        Titles to Audit:
+        Analyze these 40 titles:
         {chr(10).join(self.titles)}
         
-        Provide:
-        1. Intent: [User search intent: e.g., Informational, Transactional]
-        2. Winner: [The superior, click-magnetic title for 2024. Must be better than the top 10.]
-        3. Gap_Keywords: [3-4 high-value keywords missing from current titles]
-        4. Difficulty: [Score 1-100 based on keyword saturation]
-        5. Alt_Optimization: [Recommended Alt Text strategy]
-        6. Summary: [3-sentence strategy summary]
-        7. Drivers: [Driver1|Driver2|...|Driver40]
+        Provide the following precise data points:
+        1. Intent: [User Search Intent]
+        2. Winner: [The Optimized Winner Title for 2024]
+        3. Gap_Keywords: [Keywords missing from competition but high value]
+        4. Heatmap: [List 4-6 primary keywords. Format: keyword:weight (weight 1-10, 10=hottest competition, 1=easy gap)]
+        5. Difficulty: [Score 1-100]
+        6. Alt_Text: [Perfect Alt Optimization string]
+        7. Summary: [2-sentence implementation strategy]
+        8. Drivers: [Driver1|Driver2|...|Driver40]
         """
         try:
             payload = {"model": "llama3.2", "prompt": prompt, "stream": False}
@@ -45,37 +46,49 @@ class DeepLLMAnalyzer:
             data = {
                 "intent": "Checking...", "winner": "Constructing Title...", 
                 "gap": "Evaluating...", "difficulty": "50", 
-                "alt": "Optimizing...", "summary": "N/A", "drivers": []
+                "alt": "Optimizing...", "summary": "N/A", "drivers": [],
+                "heatmap": [] # [{word: 'X', weight: 1-10}]
             }
             
             def clean_val(val):
-                # Aggressively strip markdown bolding, italics, and leading numbering
-                v = re.sub(r'^\d+\.\s*', '', val) # Remove leading "1. "
+                v = re.sub(r'^\d+\.\s*', '', val)
                 v = v.replace('**', '').replace('*', '').strip()
                 return v
 
             lines = text.split('\n')
             for line in lines:
                 l_strip = line.strip().lower()
-                if "intent:" in l_strip: data["intent"] = clean_val(line.split(':', 1)[-1])
-                elif "winner:" in l_strip: data["winner"] = clean_val(line.split(':', 1)[-1])
-                elif "gap_keywords:" in l_strip: data["gap"] = clean_val(line.split(':', 1)[-1])
-                elif "difficulty:" in l_strip: data["difficulty"] = clean_val(line.split(':', 1)[-1]).replace('%', '')
-                elif "alt_optimization:" in l_strip: data["alt"] = clean_val(line.split(':', 1)[-1])
-                elif "summary:" in l_strip: data["summary"] = clean_val(line.split(':', 1)[-1])
+                val = line.split(':', 1)[-1].strip() if ':' in line else ""
+                
+                if "intent:" in l_strip: data["intent"] = clean_val(val)
+                elif "winner:" in l_strip: data["winner"] = clean_val(val)
+                elif "gap_keywords:" in l_strip: data["gap"] = clean_val(val)
+                elif "difficulty:" in l_strip: data["difficulty"] = clean_val(val).replace('%', '')
+                elif "alt_text:" in l_strip: data["alt"] = clean_val(val)
+                elif "summary:" in l_strip: data["summary"] = clean_val(val)
+                elif "heatmap:" in l_strip:
+                    raw_heat = clean_val(val).split(',')
+                    for h in raw_heat:
+                        if ':' in h:
+                            word, weight = h.split(':', 1)
+                            data["heatmap"].append({"word": word.strip(), "weight": int(re.search(r'\d+', weight).group()) if re.search(r'\d+', weight) else 5})
                 elif "drivers:" in l_strip:
-                    drivers_raw = clean_val(line.split(':', 1)[-1])
-                    data["drivers"] = [d.strip() for d in drivers_raw.split('|')]
+                    data["drivers"] = [d.strip() for d in clean_val(val).split('|')]
+            
+            # Generate Automated Schema
+            data["schema"] = {
+                "@context": "https://schema.org/",
+                "@type": "ImageObject",
+                "name": data["winner"],
+                "description": data["summary"],
+                "contentUrl": "https://yoursite.com/optimized-image.webp",
+                "keywords": data["gap"]
+            }
             
             return data
         except Exception as e:
             print(f"Llama Error: {e}")
-            return {
-                "intent": "SEO", "winner": f"Optimized {self.keyword} 2024",
-                "gap": "Missing Context", "difficulty": "40",
-                "alt": "Focus Keywords", "summary": "N/A", 
-                "drivers": ["Direct Match"] * 40
-            }
+            return {"intent": "SEO", "winner": f"Optimized {self.keyword} 2024", "gap": "Missing Context", "difficulty": "40", "alt": "Focus", "summary": "N/A", "drivers": ["Direct Match"] * 40, "heatmap": [], "schema": {}}
 
 def fetch_rankings(keyword):
     results = {"Google": [], "Bing": []}
