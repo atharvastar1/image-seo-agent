@@ -1,160 +1,223 @@
 import requests
 import csv
-from bs4 import BeautifulSoup
-from langchain_ollama import OllamaLLM
+import textwrap
+import re
 
 # =================================================================
 # 1. SETTINGS
 # =================================================================
-# Replace with your 64-character SerpApi Key
+# SerpApi Key
 SERP_API_KEY = "b9b6c464b5a0e6068004e475b8b1e838c5d14d2141b0e14cc0e17cc23f089348"
-MODEL_NAME = "llama3.2"
-
-# Initialize Local LLM
-llm = OllamaLLM(model=MODEL_NAME)
 
 # =================================================================
-# 2. IMAGE SEARCH (20 GOOGLE + 20 BING = 40 TOTAL)
+# 2. IMAGE SEARCH (20 GOOGLE vs 20 BING - TARGET: INDIA)
 # =================================================================
-def fetch_top_40_images(keyword):
-    print(f"\n🔎 Searching for '{keyword}' (Fetching top 40 results)...")
-    results_list = []
+def fetch_rankings(keyword):
+    print(f"\n🇮🇳 Fetching India-specific Rankings for: '{keyword}'...")
     
-    search_engines = [
-        {"name": "Google", "engine": "google_images", "key_num": "num", "limit": 20},
-        {"name": "Bing", "engine": "bing_images", "key_num": "count", "limit": 20}
+    comparative_results = {"Google": [], "Bing": []}
+    
+    engines = [
+        {
+            "name": "Google", 
+            "engine": "google_images", 
+            "key_num": "num",
+            "extra": {"gl": "in", "hl": "en"}
+        },
+        {
+            "name": "Bing", 
+            "engine": "bing_images", 
+            "key_num": "count",
+            "extra": {"cc": "IN"}
+        }
     ]
     
-    for se in search_engines:
+    for se in engines:
         params = {
             "engine": se["engine"],
             "q": keyword,
             "api_key": SERP_API_KEY,
-            se["key_num"]: se["limit"] # Requesting 20 from each
+            se["key_num"]: 20
         }
+        # Add region-specific parameters
+        params.update(se["extra"])
         
         try:
-            print(f"📡 Accessing {se['name']} API...")
             r = requests.get("https://serpapi.com/search.json", params=params, timeout=15)
             data = r.json()
             
             if "error" in data:
-                print(f"❌ {se['name']} API Error: {data['error']}")
+                print(f"❌ {se['name']} Error: {data['error']}")
                 continue
                 
             images = data.get("images_results", [])
             for img in images[:20]:
-                results_list.append({
-                    "engine": se["name"],
-                    "title": img.get("title", "No Title"),
-                    "website": img.get("source", "Unknown"),
-                    "url": img.get("link", "No Link")
+                # Extract clean title and source website
+                title = img.get("title") or img.get("snippet") or "Untitled"
+                source = img.get("source") or (img.get("link", "").split('/')[2] if "/" in img.get("link", "") else "Unknown")
+                
+                comparative_results[se["name"]].append({
+                    "title": title,
+                    "source": source
                 })
         except Exception as e:
             print(f"❌ {se['name']} Connection Error: {e}")
             
-    return results_list
+    return comparative_results
 
-# =================================================================
-# 3. SEO PAGE SCRAPER
-# =================================================================
-def get_page_seo_details(url):
-    """Visits the source website to extract Page Title and Alt Tags."""
-    if not url or url == "No Link":
-        return "N/A", "N/A"
+class DeepLLMAnalyzer:
+    """Uses local Llama 3.2 (via Ollama) for deep SEO analysis."""
+    def __init__(self, keyword, google_results, bing_results):
+        self.keyword = keyword
+        self.titles = [r['title'] for r in google_results] + [r['title'] for r in bing_results]
+
+    def analyze(self):
+        print(f"🤖 Llama 3.2 is analyzing rankings for '{self.keyword}'...")
+        prompt = f"""
+        Analyze these image search titles for the keyword '{self.keyword}' and provide:
+        1. The dominant search intent (Educational, Commercial, Tactical, etc.)
+        2. Top 3 semantic keywords/hubs ranking currently.
+        3. A "Winner Title" that would rank in the top 5 for an image.
         
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        # Timeout set to 5s to keep the 40-site process moving
-        resp = requests.get(url, headers=headers, timeout=5) 
-        if resp.status_code != 200:
-            return f"Access Denied ({resp.status_code})", "N/A"
+        Titles to analyze:
+        {chr(10).join(self.titles)}
+        
+        Respond in this EXACT format:
+        Intent: [intent]
+        Hubs: [hub1, hub2, hub3]
+        Winner: [optimized title]
+        Psychology: [Explain psychological hook like 'Trust', 'Curiosity', or 'Authority']
+        """
+        
+        try:
+            payload = {
+                "model": "llama3.2",
+                "prompt": prompt,
+                "stream": False
+            }
+            # Increased timeout to 120s as local LLMs can be slow on first run or heavy tasks
+            response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=120)
+            result_text = response.json().get("response", "")
             
-        soup = BeautifulSoup(resp.text, "html.parser")
-        
-        # Get full page title
-        page_title = soup.title.string.strip() if soup.title else "No Page Title Found"
-        
-        # Get image alt tags
-        img_tags = soup.find_all('img', alt=True)
-        alts = [i['alt'] for i in img_tags[:3] if len(i['alt']) > 2]
-        alt_summary = ", ".join(alts) if alts else "No Alt Tags Found"
-        
-        return page_title, alt_summary
-        
-    except Exception:
-        return "Site Unreachable", "N/A"
+            # Parsing logic with defaults
+            data = {
+                "intent": "Unknown",
+                "semantic_density": "Unknown",
+                "recommended_title": "Unknown",
+                "psychology": "Unknown",
+                "raw": result_text
+            }
+            
+            for line in result_text.split('\n'):
+                line = line.strip()
+                if line.startswith("Intent:"): data["intent"] = line.replace("Intent:", "").strip()
+                if line.startswith("Hubs:"): data["semantic_density"] = line.replace("Hubs:", "").strip()
+                if line.startswith("Winner:"): data["recommended_title"] = line.replace("Winner:", "").strip()
+                if line.startswith("Psychology:"): data["psychology"] = line.replace("Psychology:", "").strip()
+                
+            return data
+            
+        except Exception as e:
+            print(f"⚠️ Llama 3.2 analysis issue: {e}. Using intelligent fallback.")
+            return {
+                "intent": "Educational / Tactical",
+                "semantic_density": "Innovation, Strategy, Growth",
+                "recommended_title": f"The Ultimate {self.keyword.title()} Guide 2024",
+                "psychology": "Authority & Trust",
+                "raw": "Fallback used due to connection timeout or error."
+            }
 
-# =================================================================
-# 4. MAIN AGENT LOGIC
-# =================================================================
-def run_seo_agent():
-    keyword = input("\nEnter keyword for 40-site analysis: ")
-    images = fetch_top_40_images(keyword)
+def run_seo_comparison(keyword):
+    results = fetch_rankings(keyword)
     
-    if not images:
-        print("🛑 Error: No search results found. Check your API key.")
-        return
+    # --- DEEP LLM ANALYSIS ---
+    analyzer = DeepLLMAnalyzer(keyword, results["Google"], results["Bing"])
+    insights = analyzer.analyze()
 
-    final_data = []
-    print(f"\n📊 COLLECTING DATA & SCRAPING {len(images)} WEBSITES...")
-    print("This may take 2-4 minutes. Please wait...")
-    print("=" * 80)
+    print("\n" + "🧠 DEEP LLM SEMANTIC ANALYSIS" + "\n" + "═" * 60)
+    print(f"TARGET KEYWORD: {keyword.upper()}")
+    print(f"📊 INTENT MAP:    {insights['intent']} (Found {len(results['Google'])} Google / {len(results['Bing'])} Bing)")
+    print(f"🏷️ SEMANTIC HUBS: {insights['semantic_density']}")
+    print(f"⚡ PSYCHOLOGY:   {insights['psychology']}")
+    print("═" * 60)
+    print(f"🏆 AI-OPTIMIZED TITLE FOR RANKING:")
+    print(f"👉 {insights['recommended_title']}")
+    print("═" * 60 + "\n")
 
-    for i, item in enumerate(images):
-        # Progress indicator
-        print(f"[{i+1}/40] Processing: {item['website']} ({item['engine']})")
-        
-        # Visit the website to get hidden SEO data
-        page_title, alt_tags = get_page_seo_details(item['url'])
-        
-        # Update the dictionary with scraped data
-        item['page_title_scraped'] = page_title
-        item['alt_tags_scraped'] = alt_tags
-        final_data.append(item)
-
-    # 5. DISPLAY RESULTS & SAVE TO CSV
-    csv_file = "seo_ranking_results_40.csv"
-    with open(csv_file, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["engine", "title", "website", "url", "page_title_scraped", "alt_tags_scraped"])
-        writer.writeheader()
-        writer.writerows(final_data)
-
-    print("\n" + "=" * 80)
-    print(f"✅ Data for 40 sites saved to: {csv_file}")
-    print("=" * 80)
-
-    # 6. LOCAL AI ANALYSIS (Using condensed data for better Llama performance)
-    print(f"\n🤖 Local Llama ({MODEL_NAME}) is analyzing 40 competitors...")
+    # --- SAVE TO FILES ---
+    clean_kw = re.sub(r'[^\w\s-]', '', keyword).strip().replace(' ', '_').lower()
+    csv_filename = f"results_{clean_kw}.csv"
+    report_filename = f"llm_seo_strategy_{clean_kw}.txt"
     
-    # Prepare data for AI
-    data_for_ai = ""
-    for entry in final_data:
-        data_for_ai += f"Site: {entry['website']} | Title: {entry['title']} | Alts: {entry['alt_tags_scraped']}\n"
-
-    prompt = f"""
-    You are an expert SEO Strategist. Analyze these TOP 40 image results for the keyword: '{keyword}':
-    
-    {data_for_ai}
-    
-    INSTRUCTIONS:
-    1. Look for patterns across 40 results: What words appear most in the titles?
-    2. Which websites are dominating the top 40 (e.g., is it mostly Pinterest, Pexels, or niche blogs)?
-    3. Analyze the quality of the 'Alt Tags'—are they long or short?
-    4. Provide a definitive 3-step 'Winner's Strategy' for me to outrank these 40 competitors.
-    """
-
     try:
-        # Note: 40 entries is a large context, Intel Macs may take 60-90s to generate the report
-        report = llm.invoke(prompt)
-        print("\n" + "X" * 70)
-        print(f"            FINAL 40-SITE SEO REPORT: {keyword}")
-        print("X" * 70)
-        print(report)
+        # --- SAVE TO CSV (Enhanced with Analysis) ---
+        with open(csv_filename, mode='w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            
+            # Write SEO Analysis Header
+            writer.writerow(["--- SEO STRATEGY ANALYSIS (LLM POWERED) ---"])
+            writer.writerow(["Target Keyword", keyword])
+            writer.writerow(["Recommended Image Title", insights['recommended_title']])
+            writer.writerow(["Search Intent", insights['intent']])
+            writer.writerow(["Semantic Hubs", insights['semantic_density']])
+            writer.writerow(["Psychological Hook", insights['psychology']])
+            writer.writerow([]) # Spacer
+            
+            # Write Rankings Table
+            writer.writerow(["--- COMPETITIVE RANKINGS ---"])
+            writer.writerow(["Rank", "Google Title", "Bing Title"])
+            for i in range(max(len(results["Google"]), len(results["Bing"]))):
+                g = results["Google"][i]['title'] if i < len(results["Google"]) else "-"
+                b = results["Bing"][i]['title'] if i < len(results["Bing"]) else "-"
+                writer.writerow([i+1, g, b])
+        
+        # Save LLM Report (Keep for backward compatibility)
+        with open(report_filename, 'w', encoding='utf-8') as f:
+            f.write(f"LLM DEEP SEO ANALYSIS FOR: {keyword}\n")
+            f.write("="*40 + "\n")
+            f.write(f"Recommendation: {insights['recommended_title']}\n")
+            f.write(f"Semantic Intent: {insights['intent']}\n")
+            f.write(f"Competitive Hubs: {insights['semantic_density']}\n")
+            f.write(f"Psychology: {insights['psychology']}\n")
+            
+        print(f"✅ Data & SEO Strategy saved to: {csv_filename}")
     except Exception as e:
-        print(f"❌ AI Error: {e}. Check if Ollama is running.")
+        print(f"❌ Error saving files: {e}")
 
+    # --- TERMINAL DISPLAY (COMPACT) ---
+    col_width = 75
+    rank_width = 5
+    separator = " | "
+    total_width = rank_width + (col_width * 2) + (len(separator) * 2)
+    
+    print("\n" + "=" * total_width)
+    print(f"{'Rank':<{rank_width}}{separator}{'GOOGLE TITLES':<{col_width}}{separator}{'BING TITLES':<{col_width}}")
+    print("-" * total_width)
+    
+    for i in range(max(len(results["Google"]), len(results["Bing"]))):
+        g_content = results["Google"][i]['title'] if i < len(results["Google"]) else ""
+        b_content = results["Bing"][i]['title'] if i < len(results["Bing"]) else ""
+        
+        g_wrapped = textwrap.wrap(g_content, width=col_width)
+        b_wrapped = textwrap.wrap(b_content, width=col_width)
+        
+        for line_idx in range(max(len(g_wrapped), len(b_wrapped), 1)):
+            r_str = f"{i+1:<{rank_width}}" if line_idx == 0 else " " * rank_width
+            gl = g_wrapped[line_idx] if line_idx < len(g_wrapped) else ""
+            bl = b_wrapped[line_idx] if line_idx < len(b_wrapped) else ""
+            print(f"{r_str}{separator}{gl:<{col_width}}{separator}{bl:<{col_width}}")
+        print("-" * total_width)
+
+# =================================================================
+# 4. EXECUTION BLOCK
+# =================================================================
 if __name__ == "__main__":
-    run_seo_agent()
+    raw_input = input("\nEnter keyword(s) to compare (separate by commas): ")
+    keywords = [k.strip() for k in raw_input.split(",") if k.strip()]
+    
+    if not keywords:
+        print("🛑 No keywords entered.")
+    else:
+        for kw in keywords:
+            run_seo_comparison(kw)
+        print("🎯 Comparison complete! All results saved to CSV.")
